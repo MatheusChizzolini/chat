@@ -10,35 +10,20 @@ public class ChatClient {
     private static final int SERVER_PORT = 12345;
 
     public static void main(String[] args) {
-        try (
-                Socket socket = new Socket(SERVER_HOST, SERVER_PORT);
-                BufferedReader keyboardInput = new BufferedReader(new InputStreamReader(System.in));
-                BufferedReader serverInput = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-                PrintWriter serverOutput = new PrintWriter(socket.getOutputStream(), true)
-        ) {
+        try (Socket socket = new Socket(SERVER_HOST, SERVER_PORT);) {
             System.out.println("Conectado ao servidor.");
+            BufferedReader keyboardInput = new BufferedReader(new InputStreamReader(System.in));
+            BufferedReader serverInput = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            PrintWriter serverOutput = new PrintWriter(socket.getOutputStream(), true);
 
-            String serverMessage = serverInput.readLine();
-            System.out.println(serverMessage);
+            Thread receiveThread = new Thread(new ReceiveThread(serverInput));
+            Thread sendThread = new Thread(new SendThread(keyboardInput, serverOutput));
 
-            String message;
-            boolean leaveMessage = false;
-            while (!leaveMessage) {
-                System.out.print("> ");
-                message = keyboardInput.readLine();
+            receiveThread.start();
+            sendThread.start();
+            sendThread.join();
 
-                serverOutput.println(message);
-
-                String response = serverInput.readLine();
-                if (response != null) {
-                    System.out.println(response);
-                }
-
-                if (message.equalsIgnoreCase("sair")) {
-                    leaveMessage = true;
-                }
-            }
-
+            socket.close();
             System.out.println("Cliente encerrado.");
         } catch (Exception e) {
             System.out.println("Erro no cliente: " + e.getMessage());
