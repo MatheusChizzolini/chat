@@ -8,6 +8,8 @@ public class DatabaseConnection {
     private static final String URL = "jdbc:sqlite:database/chat.db";
 
     public static Connection getConnection() throws SQLException {
-        return DriverManager.getConnection(URL);
+        Connection connection = DriverManager.getConnection(URL);
+        connection.createStatement().execute("PRAGMA foreign_keys = ON;");
+        return connection;
     }
 }

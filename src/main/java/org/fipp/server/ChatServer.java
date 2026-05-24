@@ -4,12 +4,12 @@ import org.fipp.database.DatabaseInitializer;
 
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 public class ChatServer {
     private static final int PORT = 12345;
-    private static final List<ClientHandler> clients = new CopyOnWriteArrayList<>();
+    private static final ConcurrentMap<Integer, ClientHandler> onlineClients = new ConcurrentHashMap<>();
     private static int clientCounter = 1;
 
     public static void main(String[] args) {
@@ -38,19 +38,22 @@ public class ChatServer {
     }
 
     public static void addClient(ClientHandler clientHandler) {
-        clients.add(clientHandler);
-    }
-
-    public static void broadcast(String message, ClientHandler sender) {
-        for (ClientHandler client : clients) {
-            if (client != sender) {
-                client.sendMessage(message);
-            }
+        int loggedUserId = clientHandler.getLoggedUserId();
+        if (loggedUserId > 0) {
+            onlineClients.put(loggedUserId, clientHandler);
         }
     }
 
+    public static ClientHandler findOnlineClient(int userId) {
+        return onlineClients.get(userId);
+    }
+
     public static void removeClient(ClientHandler clientHandler) {
-        clients.remove(clientHandler);
+        int loggedUserId = clientHandler.getLoggedUserId();
+        if (loggedUserId > 0) {
+            onlineClients.remove(loggedUserId, clientHandler);
+        }
+
         System.out.println(clientHandler.getClientName() + " removido da lista de clientes conectados.");
     }
 }

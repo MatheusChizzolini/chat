@@ -3,7 +3,7 @@ package org.fipp.client;
 import java.io.BufferedReader;
 
 public class ReceiveThread implements Runnable {
-    private static final String LEAVE_CONFIRMATION = "Você saiu do chat.";
+    private static final String LEAVE_CONFIRMATION = "Voce saiu do chat.";
 
     private final BufferedReader serverInput;
 
@@ -22,21 +22,22 @@ public class ReceiveThread implements Runnable {
 
                 if (message.equalsIgnoreCase(LEAVE_CONFIRMATION)) {
                     isReceiving = false;
-                } else {
-                    if (shouldShowPrompt(message)) {
-                        System.out.print("> ");
-                    }
+                } else if (shouldShowPrompt(message)) {
+                    System.out.print("> ");
                 }
             }
         } catch (Exception e) {
-            System.out.println("Conexão com o servidor encerrada.");
+            System.out.println("Conexao com o servidor encerrada.");
         }
     }
 
     private boolean shouldShowPrompt(String message) {
-        return message.equals("Digite sua opção:")
+        return message.equals("Digite sua opcao:")
                 || message.equals("Digite uma mensagem:")
                 || message.equals("Digite um comando:")
+                || message.equals("Digite sim ou nao:")
+                || message.equals("Digite (sim/nao):")
+                || message.equals("Aceitar? (sim/nao):")
                 || message.equals("Login:")
                 || message.equals("Senha:")
                 || message.equals("Nome completo:")

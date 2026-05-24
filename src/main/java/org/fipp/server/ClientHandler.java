@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
+import java.util.List;
 
 public class ClientHandler implements Runnable {
     private static final String STATUS_ONLINE = "online";
@@ -21,6 +22,7 @@ public class ClientHandler implements Runnable {
     private String clientName;
     private User loggedUser;
     private PrintWriter output;
+    private PrivateChatService privateChatService;
     private boolean isAvailableInChat;
 
     public ClientHandler(Socket clientSocket, String clientName) {
@@ -32,11 +34,20 @@ public class ClientHandler implements Runnable {
         return clientName;
     }
 
+    public int getLoggedUserId() {
+        if (loggedUser == null) {
+            return 0;
+        }
+
+        return loggedUser.id();
+    }
+
     @Override
     public void run() {
         try {
             BufferedReader input = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
             output = new PrintWriter(clientSocket.getOutputStream(), true);
+            privateChatService = new PrivateChatService(this, output);
 
             boolean isClientConnected = true;
             while (isClientConnected) {
@@ -45,7 +56,7 @@ public class ClientHandler implements Runnable {
                 if (loggedUser == null) {
                     isClientConnected = false;
                 } else {
-                    clientName = loggedUser.fullName();
+                    clientName = loggedUser.username();
                     isClientConnected = handleLoggedUser(input);
                     loggedUser = null;
                 }
@@ -65,18 +76,19 @@ public class ClientHandler implements Runnable {
         while (isChoosing && user == null) {
             showAuthenticationMenu();
             String option = input.readLine();
+            String normalizedOption = ChatCommand.normalize(option);
 
-            if (option == null || option.equalsIgnoreCase("sair")) {
+            if (option == null || normalizedOption.equals("sair")) {
                 isChoosing = false;
-                output.println("Conexão encerrada.");
-            } else if (option.equals("1")) {
+                output.println("Conexao encerrada.");
+            } else if (normalizedOption.equals("1")) {
                 user = login(input);
-            } else if (option.equals("2")) {
+            } else if (normalizedOption.equals("2")) {
                 user = register(input);
-            } else if (option.equals("3")) {
+            } else if (normalizedOption.equals("3")) {
                 recoverPassword(input);
             } else {
-                output.println("Opção inválida. Digite 1 para login, 2 para cadastrar, 3 para recuperar senha ou 'sair' para encerrar.");
+                output.println("Opcao invalida. Digite 1 para login, 2 para cadastrar, 3 para recuperar senha ou 'sair' para encerrar.");
             }
         }
 
@@ -86,9 +98,9 @@ public class ClientHandler implements Runnable {
     private void showAuthenticationMenu() {
         output.println("Bem-vindo ao chat.");
         output.println("1 - Fazer login");
-        output.println("2 - Cadastrar usuário");
+        output.println("2 - Cadastrar usuario");
         output.println("3 - Recuperar senha");
-        output.println("Digite sua opção:");
+        output.println("Digite sua opcao:");
     }
 
     private User login(BufferedReader input) throws IOException {
@@ -103,7 +115,7 @@ public class ClientHandler implements Runnable {
         if (username != null && password != null) {
             user = UserRepository.findByUsernameAndPassword(username, password);
             if (user == null) {
-                output.println("Login ou senha inválidos.");
+                output.println("Login ou senha invalidos.");
             }
         }
 
@@ -132,7 +144,7 @@ public class ClientHandler implements Runnable {
         if (fullName != null && username != null && email != null && password != null) {
             user = UserRepository.register(fullName, username, email, password);
             if (user == null) {
-                output.println("Não foi possível cadastrar. Confira se nome, login ou email já estão em uso.");
+                output.println("Nao foi possivel cadastrar. Confira se nome, login ou email ja estao em uso.");
             } else {
                 output.println("Cadastro realizado com sucesso.");
             }
@@ -147,7 +159,7 @@ public class ClientHandler implements Runnable {
         if (email != null) {
             String password = UserRepository.findPasswordByEmail(email);
             if (password == null) {
-                output.println("Nenhum usuário encontrado com esse email.");
+                output.println("Nenhum usuario encontrado com esse email.");
             } else {
                 output.println("Senha cadastrada: " + password);
             }
@@ -160,30 +172,26 @@ public class ClientHandler implements Runnable {
         String currentStatus = STATUS_ONLINE;
 
         while (isClientConnected && isLoggedIn) {
-            String action;
-
-            if (currentStatus.equals(STATUS_ONLINE)) {
-                action = startOnlineChat(input);
-            } else {
-                action = keepUserInactive(input, currentStatus);
-            }
+            String action = currentStatus.equals(STATUS_ONLINE)
+                    ? startOnlineChat(input)
+                    : keepUserInactive(input, currentStatus);
 
             if (action.equals(ACTION_LOGOUT)) {
                 isLoggedIn = false;
-                UserRepository.updateStatus(loggedUser.id(), STATUS_OFFLINE);
+                disconnectCurrentSession();
                 output.println("Logout realizado.");
             } else if (action.equals(ACTION_EXIT)) {
                 isClientConnected = false;
                 isLoggedIn = false;
-                UserRepository.updateStatus(loggedUser.id(), STATUS_OFFLINE);
+                disconnectCurrentSession();
             } else if (action.equals(ACTION_STATUS)) {
                 String selectedStatus = selectStatus(input);
 
                 if (selectedStatus == null) {
                     isClientConnected = false;
                     isLoggedIn = false;
-                    UserRepository.updateStatus(loggedUser.id(), STATUS_OFFLINE);
-                    output.println("Conexão encerrada.");
+                    disconnectCurrentSession();
+                    output.println("Conexao encerrada.");
                 } else {
                     currentStatus = selectedStatus;
                 }
@@ -193,16 +201,22 @@ public class ClientHandler implements Runnable {
         return isClientConnected;
     }
 
+    private void disconnectCurrentSession() {
+        privateChatService.clearPendingRequests();
+        UserRepository.updateStatus(loggedUser.id(), STATUS_OFFLINE);
+    }
+
     private String startOnlineChat(BufferedReader input) throws IOException {
         UserRepository.updateStatus(loggedUser.id(), STATUS_ONLINE);
         ChatServer.addClient(this);
         isAvailableInChat = true;
 
         output.println("Conectado ao chat como " + clientName + ".");
-        output.println("Digite 'ajuda' para ver os comandos disponíveis.");
+        privateChatService.deliverQueuedMessages(loggedUser);
+        privateChatService.loadPendingPrivateRequests(loggedUser);
+        output.println("Digite 'ajuda' para ver os comandos disponiveis.");
         output.println("Digite uma mensagem:");
 
-        ChatServer.broadcast(clientName + " entrou no chat.", this);
         String action = receiveMessages(input);
         removeFromOnlineChat();
 
@@ -212,8 +226,8 @@ public class ClientHandler implements Runnable {
     private String keepUserInactive(BufferedReader input, String status) throws IOException {
         UserRepository.updateStatus(loggedUser.id(), status);
         output.println("Status definido como " + translateStatus(status) + ".");
-        output.println("Apenas usuários online podem enviar e receber mensagens.");
-        output.println("Digite 'ajuda' para ver os comandos disponíveis.");
+        output.println("Apenas usuarios online podem enviar e receber mensagens.");
+        output.println("Digite 'ajuda' para ver os comandos disponiveis.");
         output.println("Digite um comando:");
 
         String action = null;
@@ -221,18 +235,19 @@ public class ClientHandler implements Runnable {
 
         while (isWaiting && action == null) {
             String command = input.readLine();
+            String normalizedCommand = ChatCommand.normalize(command);
 
-            if (command == null || command.equalsIgnoreCase("sair")) {
+            if (command == null || normalizedCommand.equals("sair")) {
                 action = ACTION_EXIT;
-            } else if (command.equalsIgnoreCase("logout")) {
+            } else if (normalizedCommand.equals("logout")) {
                 action = ACTION_LOGOUT;
-            } else if (command.equalsIgnoreCase("status")) {
+            } else if (normalizedCommand.equals("status")) {
                 action = ACTION_STATUS;
-            } else if (command.equalsIgnoreCase("ajuda")) {
+            } else if (normalizedCommand.equals("ajuda")) {
                 showHelp();
                 output.println("Digite um comando:");
             } else {
-                output.println("Comando inválido. Digite 'ajuda' para ver os comandos disponíveis.");
+                output.println("Comando invalido. Digite 'ajuda' para ver os comandos disponiveis.");
                 output.println("Digite um comando:");
             }
         }
@@ -241,34 +256,70 @@ public class ClientHandler implements Runnable {
     }
 
     private String receiveMessages(BufferedReader input) throws IOException {
-        String action = ACTION_EXIT;
+        String action = null;
         String message;
         boolean isReceiving = true;
 
         while ((message = input.readLine()) != null && isReceiving) {
-            if (message.equalsIgnoreCase("sair")) {
-                output.println("Você saiu do chat.");
-                action = ACTION_EXIT;
-                isReceiving = false;
-            } else if (message.equalsIgnoreCase("logout")) {
-                action = ACTION_LOGOUT;
-                isReceiving = false;
-            } else if (message.equalsIgnoreCase("status")) {
-                action = ACTION_STATUS;
-                isReceiving = false;
-            } else if (message.equalsIgnoreCase("ajuda")) {
-                showHelp();
+            ChatCommand command = ChatCommand.parse(message);
+
+            if (privateChatService.handlePendingPrivateResponse(command.normalizedText(), loggedUser)) {
                 output.println("Digite uma mensagem:");
             } else {
-                System.out.println(clientName + " enviou: " + message);
-                String formattedMessage = clientName + ": " + message;
-                ChatServer.broadcast(formattedMessage, this);
-
-                output.println("Mensagem enviada.");
+                action = handleChatCommand(command);
+                isReceiving = action == null;
             }
         }
 
+        if (action == null) {
+            action = ACTION_EXIT;
+        }
+
         return action;
+    }
+
+    private String handleChatCommand(ChatCommand command) {
+        String action = null;
+
+        switch (command.type()) {
+            case EXIT -> {
+                output.println("Voce saiu do chat.");
+                action = ACTION_EXIT;
+            }
+            case LOGOUT -> action = ACTION_LOGOUT;
+            case STATUS -> action = ACTION_STATUS;
+            case HELP -> showHelp();
+            case LIST_USERS -> listOnlineUsers();
+            case LIST_GROUPS -> output.println("Grupos ainda nao implementados nesta etapa.");
+            case DIRECT_MESSAGE -> privateChatService.handleDirectMessage(command, loggedUser);
+            case INVALID -> output.println("Mensagem invalida. Digite 'ajuda'.");
+        }
+
+        if (action == null) {
+            output.println("Digite uma mensagem:");
+        }
+
+        return action;
+    }
+
+    public void receivePrivateRequest(User requester) {
+        if (privateChatService != null) {
+            privateChatService.receivePrivateRequest(requester);
+        }
+    }
+
+    private void listOnlineUsers() {
+        List<User> users = UserRepository.findOnlineUsers();
+
+        if (users.isEmpty()) {
+            output.println("Nenhum usuario online.");
+        } else {
+            output.println("Usuarios online:");
+            for (User user : users) {
+                String currentUserSuffix = user.id() == loggedUser.id() ? " (voce)" : "";
+                output.println("- " + user.username() + currentUserSuffix);
+            }
+        }
     }
 
     private String selectStatus(BufferedReader input) throws IOException {
@@ -280,20 +331,21 @@ public class ClientHandler implements Runnable {
             output.println("1 - Online");
             output.println("2 - Offline");
             output.println("3 - Ocupado");
-            output.println("Digite sua opção:");
+            output.println("Digite sua opcao:");
 
             String option = input.readLine();
+            String normalizedOption = ChatCommand.normalize(option);
 
-            if (option == null || option.equalsIgnoreCase("sair")) {
+            if (option == null || normalizedOption.equals("sair")) {
                 isChoosing = false;
-            } else if (option.equals("1")) {
+            } else if (normalizedOption.equals("1")) {
                 status = STATUS_ONLINE;
-            } else if (option.equals("2")) {
+            } else if (normalizedOption.equals("2")) {
                 status = STATUS_OFFLINE;
-            } else if (option.equals("3")) {
+            } else if (normalizedOption.equals("3")) {
                 status = STATUS_BUSY;
             } else {
-                output.println("Opção inválida. Digite 1, 2 ou 3.");
+                output.println("Opcao invalida. Digite 1, 2 ou 3.");
             }
         }
 
@@ -301,8 +353,11 @@ public class ClientHandler implements Runnable {
     }
 
     private void showHelp() {
-        output.println("Comandos disponíveis:");
+        output.println("Comandos disponiveis:");
         output.println("ajuda - Exibe esta lista de comandos.");
+        output.println("listausuarios - Lista os usuarios online.");
+        output.println("listagrupos - Lista grupos existentes quando a etapa de grupos for implementada.");
+        output.println("@nomeusuario: mensagem - Envia mensagem privada para um usuario.");
         output.println("status - Permite alterar seu status para online, offline ou ocupado.");
         output.println("logout - Sai da conta atual e volta para o menu inicial.");
         output.println("sair - Encerra o cliente e desconecta do servidor.");
@@ -315,12 +370,13 @@ public class ClientHandler implements Runnable {
         while (isReading && value == null) {
             output.println(prompt);
             String typedValue = input.readLine();
+            String normalizedValue = ChatCommand.normalize(typedValue);
 
-            if (typedValue == null || typedValue.equalsIgnoreCase("sair")) {
+            if (typedValue == null || normalizedValue.equals("sair")) {
                 isReading = false;
-                output.println("Operação cancelada.");
+                output.println("Operacao cancelada.");
             } else if (typedValue.isBlank()) {
-                output.println("Este campo é obrigatório.");
+                output.println("Este campo e obrigatorio.");
             } else {
                 value = typedValue.trim();
             }
@@ -344,7 +400,6 @@ public class ClientHandler implements Runnable {
     private void removeFromOnlineChat() {
         if (isAvailableInChat) {
             ChatServer.removeClient(this);
-            ChatServer.broadcast(clientName + " saiu do chat.", this);
             isAvailableInChat = false;
         }
     }
@@ -370,7 +425,7 @@ public class ClientHandler implements Runnable {
 
             System.out.println("Cliente desconectado.");
         } catch (Exception e) {
-            System.out.println("Erro ao fechar conexão com cliente: " + e.getMessage());
+            System.out.println("Erro ao fechar conexao com cliente: " + e.getMessage());
         }
     }
 }
