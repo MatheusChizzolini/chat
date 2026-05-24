@@ -10,16 +10,15 @@ import java.sql.ResultSet;
 public class UserRepository {
     public static User register(String fullName, String username, String email, String password) {
         User user = null;
-
         if (existsByUsername(username)) {
             System.out.println("Nome de usuário já utilizado: " + username);
         } else if (existsByEmail(email)) {
             System.out.println("Email já utilizado: " + email);
         } else {
             String sql = """
-                        INSERT INTO users (full_name, username, email, password, status)
-                        VALUES (?, ?, ?, ?, 'offline');
-                    """;
+                INSERT INTO users (full_name, username, email, password, status)
+                VALUES (?, ?, ?, ?, 'offline');
+            """;
 
             try (Connection connection = DatabaseConnection.getConnection();
                  PreparedStatement statement = connection.prepareStatement(sql)) {
@@ -40,10 +39,10 @@ public class UserRepository {
     public static User findByUsernameAndPassword(String username, String password) {
         User user = null;
         String sql = """
-                    SELECT id, full_name, username, email, status
-                    FROM users
-                    WHERE username = ? AND password = ?;
-                """;
+            SELECT id, full_name, username, email, status
+            FROM users
+            WHERE username = ? AND password = ?;
+        """;
 
         try (Connection connection = DatabaseConnection.getConnection();
              PreparedStatement statement = connection.prepareStatement(sql)) {
@@ -66,6 +65,26 @@ public class UserRepository {
         }
 
         return user;
+    }
+
+    public static String findPasswordByEmail(String email) {
+        String password = null;
+        String sql = "SELECT password FROM users WHERE LOWER(email) = LOWER(?);";
+
+        try (Connection connection = DatabaseConnection.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, email);
+
+            try (ResultSet resultSet = statement.executeQuery()) {
+                if (resultSet.next()) {
+                    password = resultSet.getString("password");
+                }
+            }
+        } catch (Exception e) {
+            System.out.println("Erro ao recuperar senha: " + e.getMessage());
+        }
+
+        return password;
     }
 
     public static void updateStatus(int userId, String status) {

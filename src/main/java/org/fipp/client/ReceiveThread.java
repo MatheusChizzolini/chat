@@ -34,9 +34,14 @@ public class ReceiveThread implements Runnable {
     }
 
     private boolean shouldShowPrompt(String message) {
-        return message.endsWith(":")
-                || message.endsWith("para encerrar.")
-                || message.equals("Mensagem enviada.")
+        return message.equals("Digite sua opção:")
+                || message.equals("Digite uma mensagem:")
+                || message.equals("Digite um comando:")
+                || message.equals("Login:")
+                || message.equals("Senha:")
+                || message.equals("Nome completo:")
+                || message.equals("Email:")
+                || message.equals("Email cadastrado:")
                 || message.contains(": ");
     }
 }

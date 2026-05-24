@@ -21,6 +21,10 @@ public class ChatClient {
             receiveThread.start();
             sendThread.start();
             sendThread.join();
+            receiveThread.join(1000);
+            if (receiveThread.isAlive()) {
+                socket.close();
+            }
             receiveThread.join();
             System.out.println("Cliente encerrado.");
         } catch (Exception e) {
