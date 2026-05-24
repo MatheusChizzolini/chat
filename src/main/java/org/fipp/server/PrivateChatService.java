@@ -38,6 +38,10 @@ public class PrivateChatService {
         pendingPrivateRequests.clear();
     }
 
+    public boolean hasPendingRequests() {
+        return !pendingPrivateRequests.isEmpty();
+    }
+
     public void handleDirectMessage(ChatCommand command, User sender) {
         String receiverUsername = command.receiverUsername();
         String content = command.content();

@@ -38,6 +38,8 @@ public class ReceiveThread implements Runnable {
                 || message.equals("Digite sim ou nao:")
                 || message.equals("Digite (sim/nao):")
                 || message.equals("Aceitar? (sim/nao):")
+                || message.equals("Aceitar convite do grupo? (sim/nao):")
+                || message.equals("Aceitar entrada no grupo? (sim/nao):")
                 || message.equals("Login:")
                 || message.equals("Senha:")
                 || message.equals("Nome completo:")

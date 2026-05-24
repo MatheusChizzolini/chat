@@ -1,5 +1,7 @@
 package org.fipp.server;
 
+import org.fipp.model.GroupInvitation;
+import org.fipp.model.GroupJoinVote;
 import org.fipp.model.User;
 import org.fipp.repository.UserRepository;
 
@@ -23,6 +25,7 @@ public class ClientHandler implements Runnable {
     private User loggedUser;
     private PrintWriter output;
     private PrivateChatService privateChatService;
+    private GroupService groupService;
     private boolean isAvailableInChat;
     private boolean hasActiveSession;
 
@@ -49,6 +52,7 @@ public class ClientHandler implements Runnable {
             BufferedReader input = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
             output = new PrintWriter(clientSocket.getOutputStream(), true);
             privateChatService = new PrivateChatService(this, output);
+            groupService = new GroupService(this, output);
 
             boolean isClientConnected = true;
             while (isClientConnected) {
@@ -83,7 +87,7 @@ public class ClientHandler implements Runnable {
         while (isChoosing && user == null) {
             showAuthenticationMenu();
             String option = input.readLine();
-            String normalizedOption = ChatCommand.normalize(option);
+            String normalizedOption = ChatCommandParser.normalize(option);
 
             if (option == null || normalizedOption.equals("sair")) {
                 isChoosing = false;
@@ -212,7 +216,14 @@ public class ClientHandler implements Runnable {
 
         output.println("Conectado ao chat como " + clientName + ".");
         privateChatService.deliverQueuedMessages(loggedUser);
+        groupService.deliverQueuedMessages(loggedUser);
+        groupService.deliverResolvedJoinRequests(loggedUser);
         privateChatService.loadPendingPrivateRequests(loggedUser);
+        groupService.loadPendingInvitations(loggedUser, !privateChatService.hasPendingRequests());
+        groupService.loadPendingJoinVotes(
+                loggedUser,
+                !privateChatService.hasPendingRequests() && !groupService.hasPendingInvitations()
+        );
         output.println("Digite 'ajuda' para ver os comandos disponiveis.");
         output.println("Digite uma mensagem:");
 
@@ -234,7 +245,7 @@ public class ClientHandler implements Runnable {
 
         while (isWaiting && action == null) {
             String command = input.readLine();
-            String normalizedCommand = ChatCommand.normalize(command);
+            String normalizedCommand = ChatCommandParser.normalize(command);
 
             if (command == null || normalizedCommand.equals("sair")) {
                 action = ACTION_EXIT;
@@ -260,9 +271,16 @@ public class ClientHandler implements Runnable {
         boolean isReceiving = true;
 
         while ((message = input.readLine()) != null && isReceiving) {
-            ChatCommand command = ChatCommand.parse(message);
+            ChatCommand command = ChatCommandParser.parse(message);
 
             if (privateChatService.handlePendingPrivateResponse(command.normalizedText(), loggedUser)) {
+                if (!privateChatService.hasPendingRequests()) {
+                    groupService.promptNextPendingResponse();
+                }
+                output.println("Digite uma mensagem:");
+            } else if (groupService.handlePendingInvitationResponse(command.normalizedText(), loggedUser)) {
+                output.println("Digite uma mensagem:");
+            } else if (groupService.handlePendingJoinVoteResponse(command.normalizedText(), loggedUser)) {
                 output.println("Digite uma mensagem:");
             } else {
                 action = handleChatCommand(command);
@@ -289,7 +307,12 @@ public class ClientHandler implements Runnable {
             case STATUS -> action = ACTION_STATUS;
             case HELP -> showHelp();
             case LIST_USERS -> listOnlineUsers();
-            case LIST_GROUPS -> output.println("Grupos ainda nao implementados nesta etapa.");
+            case LIST_GROUPS -> groupService.listGroups();
+            case CREATE_GROUP -> groupService.createGroup(command, loggedUser);
+            case INVITE_TO_GROUP -> groupService.inviteMembers(command, loggedUser);
+            case REQUEST_GROUP_ENTRY -> groupService.requestEntry(command, loggedUser);
+            case LEAVE_GROUP -> groupService.leaveGroup(command, loggedUser);
+            case GROUP_MESSAGE -> groupService.handleGroupMessage(command, loggedUser);
             case DIRECT_MESSAGE -> privateChatService.handleDirectMessage(command, loggedUser);
             case INVALID -> output.println("Mensagem invalida. Digite 'ajuda'.");
         }
@@ -304,6 +327,24 @@ public class ClientHandler implements Runnable {
     public void receivePrivateRequest(User requester) {
         if (privateChatService != null) {
             privateChatService.receivePrivateRequest(requester);
+        }
+    }
+
+    public void receiveGroupInvitation(GroupInvitation invitation) {
+        if (groupService != null) {
+            groupService.receiveInvitation(invitation, !privateChatService.hasPendingRequests());
+        }
+    }
+
+    public void receiveGroupJoinVote(GroupJoinVote vote) {
+        if (groupService != null) {
+            groupService.receiveJoinVote(vote, !privateChatService.hasPendingRequests());
+        }
+    }
+
+    public void cancelGroupJoinVote(int requestId, String groupName) {
+        if (groupService != null) {
+            groupService.cancelJoinVote(requestId, groupName, !privateChatService.hasPendingRequests());
         }
     }
 
@@ -333,7 +374,7 @@ public class ClientHandler implements Runnable {
             output.println("Digite sua opcao:");
 
             String option = input.readLine();
-            String normalizedOption = ChatCommand.normalize(option);
+            String normalizedOption = ChatCommandParser.normalize(option);
 
             if (option == null || normalizedOption.equals("sair")) {
                 isChoosing = false;
@@ -355,7 +396,13 @@ public class ClientHandler implements Runnable {
         output.println("Comandos disponiveis:");
         output.println("ajuda - Exibe esta lista de comandos.");
         output.println("listausuarios - Lista os usuarios online.");
-        output.println("listagrupos - Lista grupos existentes quando a etapa de grupos for implementada.");
+        output.println("listagrupos - Lista os grupos existentes.");
+        output.println("novogrupo nomegrupo - Cria um grupo e inclui voce como participante.");
+        output.println("inserir &nomegrupo@usuario1,@usuario2 - Convida usuarios para um grupo.");
+        output.println("entrar &nomegrupo - Solicita entrada em um grupo aos participantes.");
+        output.println("sair &nomegrupo - Sai de um grupo e avisa os participantes.");
+        output.println("&nomegrupo: mensagem - Envia mensagem para todos os participantes.");
+        output.println("&nomegrupo@usuario1,@usuario2: mensagem - Envia mensagem para membros selecionados.");
         output.println("@nomeusuario: mensagem - Envia mensagem privada para um usuario.");
         output.println("status - Permite alterar seu status para online, offline ou ocupado.");
         output.println("logout - Sai da conta atual e volta para o menu inicial.");
@@ -369,7 +416,7 @@ public class ClientHandler implements Runnable {
         while (isReading && value == null) {
             output.println(prompt);
             String typedValue = input.readLine();
-            String normalizedValue = ChatCommand.normalize(typedValue);
+            String normalizedValue = ChatCommandParser.normalize(typedValue);
 
             if (typedValue == null || normalizedValue.equals("sair")) {
                 isReading = false;
@@ -406,6 +453,7 @@ public class ClientHandler implements Runnable {
     private void closeCurrentSession() {
         if (loggedUser != null && hasActiveSession) {
             privateChatService.clearPendingRequests();
+            groupService.clearPendingInvitations();
             UserRepository.updateStatus(loggedUser.id(), STATUS_OFFLINE);
             ChatServer.endSession(this);
             isAvailableInChat = false;

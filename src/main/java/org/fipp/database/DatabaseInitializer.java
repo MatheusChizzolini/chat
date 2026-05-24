@@ -12,6 +12,12 @@ public class DatabaseInitializer {
         createUsersTable();
         createAuthorizedConnectionsTable();
         createDirectMessagesTable();
+        createGroupsTable();
+        createGroupMembersTable();
+        createGroupInvitationsTable();
+        createGroupJoinRequestsTable();
+        createGroupJoinVotesTable();
+        createGroupMessagesTable();
     }
 
     private static void createDatabaseDirectory() {
@@ -95,6 +101,150 @@ public class DatabaseInitializer {
             System.out.println("Tabela de mensagens privadas criada/checada com sucesso.");
         } catch (Exception e) {
             System.out.println("Erro ao criar tabela de mensagens privadas: " + e.getMessage());
+        }
+    }
+
+    private static void createGroupsTable() {
+        String sql = """
+            CREATE TABLE IF NOT EXISTS groups (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+                created_by_id INTEGER NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (created_by_id) REFERENCES users(id) ON DELETE CASCADE
+            );
+        """;
+
+        try (Connection connection = DatabaseConnection.getConnection();
+             Statement statement = connection.createStatement()) {
+            statement.execute(sql);
+            System.out.println("Tabela de grupos criada/checada com sucesso.");
+        } catch (Exception e) {
+            System.out.println("Erro ao criar tabela de grupos: " + e.getMessage());
+        }
+    }
+
+    private static void createGroupMembersTable() {
+        String sql = """
+            CREATE TABLE IF NOT EXISTS group_members (
+                group_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                joined_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (group_id, user_id),
+                FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            );
+        """;
+
+        try (Connection connection = DatabaseConnection.getConnection();
+             Statement statement = connection.createStatement()) {
+            statement.execute(sql);
+            System.out.println("Tabela de membros dos grupos criada/checada com sucesso.");
+        } catch (Exception e) {
+            System.out.println("Erro ao criar tabela de membros dos grupos: " + e.getMessage());
+        }
+    }
+
+    private static void createGroupInvitationsTable() {
+        String sql = """
+            CREATE TABLE IF NOT EXISTS group_invitations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                group_id INTEGER NOT NULL,
+                invited_by_id INTEGER NOT NULL,
+                receiver_id INTEGER NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                responded_at TEXT,
+                UNIQUE (group_id, receiver_id),
+                FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE,
+                FOREIGN KEY (invited_by_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (receiver_id) REFERENCES users(id) ON DELETE CASCADE,
+                CHECK (status IN ('pending', 'accepted', 'rejected'))
+            );
+        """;
+
+        try (Connection connection = DatabaseConnection.getConnection();
+             Statement statement = connection.createStatement()) {
+            statement.execute(sql);
+            System.out.println("Tabela de convites dos grupos criada/checada com sucesso.");
+        } catch (Exception e) {
+            System.out.println("Erro ao criar tabela de convites dos grupos: " + e.getMessage());
+        }
+    }
+
+    private static void createGroupJoinRequestsTable() {
+        String sql = """
+            CREATE TABLE IF NOT EXISTS group_join_requests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                group_id INTEGER NOT NULL,
+                requester_id INTEGER NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                resolved_at TEXT,
+                notified_at TEXT,
+                UNIQUE (group_id, requester_id),
+                FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE,
+                FOREIGN KEY (requester_id) REFERENCES users(id) ON DELETE CASCADE,
+                CHECK (status IN ('pending', 'accepted', 'rejected'))
+            );
+        """;
+
+        try (Connection connection = DatabaseConnection.getConnection();
+             Statement statement = connection.createStatement()) {
+            statement.execute(sql);
+            System.out.println("Tabela de solicitacoes de entrada criada/checada com sucesso.");
+        } catch (Exception e) {
+            System.out.println("Erro ao criar tabela de solicitacoes de entrada: " + e.getMessage());
+        }
+    }
+
+    private static void createGroupJoinVotesTable() {
+        String sql = """
+            CREATE TABLE IF NOT EXISTS group_join_votes (
+                request_id INTEGER NOT NULL,
+                voter_id INTEGER NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                responded_at TEXT,
+                PRIMARY KEY (request_id, voter_id),
+                FOREIGN KEY (request_id) REFERENCES group_join_requests(id) ON DELETE CASCADE,
+                FOREIGN KEY (voter_id) REFERENCES users(id) ON DELETE CASCADE,
+                CHECK (status IN ('pending', 'accepted', 'rejected'))
+            );
+        """;
+
+        try (Connection connection = DatabaseConnection.getConnection();
+             Statement statement = connection.createStatement()) {
+            statement.execute(sql);
+            System.out.println("Tabela de votos para entrada criada/checada com sucesso.");
+        } catch (Exception e) {
+            System.out.println("Erro ao criar tabela de votos para entrada: " + e.getMessage());
+        }
+    }
+
+    private static void createGroupMessagesTable() {
+        String sql = """
+            CREATE TABLE IF NOT EXISTS group_messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                group_id INTEGER NOT NULL,
+                sender_id INTEGER NOT NULL,
+                receiver_id INTEGER NOT NULL,
+                content TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'queued',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                delivered_at TEXT,
+                FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE,
+                FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (receiver_id) REFERENCES users(id) ON DELETE CASCADE,
+                CHECK (status IN ('queued', 'delivered'))
+            );
+        """;
+
+        try (Connection connection = DatabaseConnection.getConnection();
+             Statement statement = connection.createStatement()) {
+            statement.execute(sql);
+            System.out.println("Tabela de mensagens dos grupos criada/checada com sucesso.");
+        } catch (Exception e) {
+            System.out.println("Erro ao criar tabela de mensagens dos grupos: " + e.getMessage());
         }
     }
 }
