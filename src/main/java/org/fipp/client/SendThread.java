@@ -19,7 +19,7 @@ public class SendThread implements Runnable {
             boolean isSending = true;
             while ((message = keyboardInput.readLine()) != null && isSending) {
                 serverOutput.println(message);
-                if (message.equalsIgnoreCase("sair")) {
+                if (message.trim().equalsIgnoreCase("sair")) {
                     isSending = false;
                 }
             }

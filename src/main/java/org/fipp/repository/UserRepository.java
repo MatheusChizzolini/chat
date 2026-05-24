@@ -12,10 +12,8 @@ import java.util.List;
 public class UserRepository {
     public static User register(String fullName, String username, String email, String password) {
         User user = null;
-        if (existsByFullName(fullName)) {
-            System.out.println("Nome completo ja utilizado: " + fullName);
-        } else if (existsByUsername(username)) {
-            System.out.println("Login ja utilizado: " + username);
+        if (existsByUsername(username)) {
+            System.out.println("Nome de usuario ja utilizado: " + username);
         } else if (existsByEmail(email)) {
             System.out.println("Email ja utilizado: " + email);
         } else {
@@ -144,16 +142,23 @@ public class UserRepository {
         }
     }
 
+    public static void markAllOffline() {
+        String sql = "UPDATE users SET status = 'offline' WHERE LOWER(status) <> 'offline';";
+
+        try (Connection connection = DatabaseConnection.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.executeUpdate();
+        } catch (Exception e) {
+            System.out.println("Erro ao limpar status online dos usuarios: " + e.getMessage());
+        }
+    }
+
     private static boolean existsByUsername(String username) {
         return existsByField("username", username);
     }
 
     private static boolean existsByEmail(String email) {
         return existsByField("email", email);
-    }
-
-    private static boolean existsByFullName(String fullName) {
-        return existsByField("full_name", fullName);
     }
 
     private static boolean existsByField(String fieldName, String value) {

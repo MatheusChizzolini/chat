@@ -105,6 +105,23 @@ public class DirectMessageRepository {
         }
     }
 
+    public static void markQueued(int messageId) {
+        String sql = """
+            UPDATE direct_messages
+            SET status = 'queued',
+                delivered_at = NULL
+            WHERE id = ?;
+        """;
+
+        try (Connection connection = DatabaseConnection.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setInt(1, messageId);
+            statement.executeUpdate();
+        } catch (Exception e) {
+            System.out.println("Erro ao enfileirar mensagem privada: " + e.getMessage());
+        }
+    }
+
     public static int rejectPendingAuthorizationMessages(int senderId, int receiverId) {
         int rejectedMessages = 0;
         String sql = """

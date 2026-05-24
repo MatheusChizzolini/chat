@@ -24,6 +24,7 @@ public class ClientHandler implements Runnable {
     private PrintWriter output;
     private PrivateChatService privateChatService;
     private boolean isAvailableInChat;
+    private boolean hasActiveSession;
 
     public ClientHandler(Socket clientSocket, String clientName) {
         this.clientSocket = clientSocket;
@@ -57,14 +58,20 @@ public class ClientHandler implements Runnable {
                     isClientConnected = false;
                 } else {
                     clientName = loggedUser.username();
-                    isClientConnected = handleLoggedUser(input);
+                    if (ChatServer.startSession(this)) {
+                        hasActiveSession = true;
+                        isClientConnected = handleLoggedUser(input);
+                        closeCurrentSession();
+                    } else {
+                        output.println("Este usuario ja esta conectado em outra sessao.");
+                    }
                     loggedUser = null;
                 }
             }
         } catch (Exception e) {
             System.out.println("Erro ao manipular " + clientName + ": " + e.getMessage());
         } finally {
-            disconnectLoggedUser();
+            closeCurrentSession();
             closeClientSocket();
         }
     }
@@ -144,7 +151,7 @@ public class ClientHandler implements Runnable {
         if (fullName != null && username != null && email != null && password != null) {
             user = UserRepository.register(fullName, username, email, password);
             if (user == null) {
-                output.println("Nao foi possivel cadastrar. Confira se nome, login ou email ja estao em uso.");
+                output.println("Nao foi possivel cadastrar. O nome de usuario ou email ja estao em uso.");
             } else {
                 output.println("Cadastro realizado com sucesso.");
             }
@@ -178,19 +185,16 @@ public class ClientHandler implements Runnable {
 
             if (action.equals(ACTION_LOGOUT)) {
                 isLoggedIn = false;
-                disconnectCurrentSession();
                 output.println("Logout realizado.");
             } else if (action.equals(ACTION_EXIT)) {
                 isClientConnected = false;
                 isLoggedIn = false;
-                disconnectCurrentSession();
             } else if (action.equals(ACTION_STATUS)) {
                 String selectedStatus = selectStatus(input);
 
                 if (selectedStatus == null) {
                     isClientConnected = false;
                     isLoggedIn = false;
-                    disconnectCurrentSession();
                     output.println("Conexao encerrada.");
                 } else {
                     currentStatus = selectedStatus;
@@ -199,11 +203,6 @@ public class ClientHandler implements Runnable {
         }
 
         return isClientConnected;
-    }
-
-    private void disconnectCurrentSession() {
-        privateChatService.clearPendingRequests();
-        UserRepository.updateStatus(loggedUser.id(), STATUS_OFFLINE);
     }
 
     private String startOnlineChat(BufferedReader input) throws IOException {
@@ -404,17 +403,23 @@ public class ClientHandler implements Runnable {
         }
     }
 
-    private void disconnectLoggedUser() {
-        if (loggedUser != null) {
+    private void closeCurrentSession() {
+        if (loggedUser != null && hasActiveSession) {
+            privateChatService.clearPendingRequests();
             UserRepository.updateStatus(loggedUser.id(), STATUS_OFFLINE);
-            removeFromOnlineChat();
+            ChatServer.endSession(this);
+            isAvailableInChat = false;
+            hasActiveSession = false;
         }
     }
 
-    public void sendMessage(String message) {
+    public boolean sendMessage(String message) {
         if (output != null) {
             output.println(message);
+            return !output.checkError();
         }
+
+        return false;
     }
 
     private void closeClientSocket() {
