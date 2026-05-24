@@ -1,4 +1,4 @@
-package org.example.database;
+package org.fipp.database;
 
 import java.sql.Connection;
 import java.sql.DriverManager;

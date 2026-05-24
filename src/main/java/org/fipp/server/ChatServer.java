@@ -1,6 +1,6 @@
-package org.example.server;
+package org.fipp.server;
 
-import org.example.database.DatabaseInitializer;
+import org.fipp.database.DatabaseInitializer;
 
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -25,7 +25,6 @@ public class ChatServer {
                 String temporaryName = "Cliente " + clientCounter;
                 clientCounter++;
                 ClientHandler clientHandler = new ClientHandler(clientSocket, temporaryName);
-                clients.add(clientHandler);
 
                 System.out.println(temporaryName + " conectado: " + clientSocket.getInetAddress());
 
@@ -36,6 +35,10 @@ public class ChatServer {
         } catch (Exception e) {
             System.out.println("Erro no servidor: " + e.getMessage());
         }
+    }
+
+    public static void addClient(ClientHandler clientHandler) {
+        clients.add(clientHandler);
     }
 
     public static void broadcast(String message, ClientHandler sender) {

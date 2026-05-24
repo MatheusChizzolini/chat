@@ -1,4 +1,4 @@
-package org.example.client;
+package org.fipp.client;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -11,7 +11,6 @@ public class ChatClient {
 
     public static void main(String[] args) {
         try (Socket socket = new Socket(SERVER_HOST, SERVER_PORT);) {
-            System.out.println("Conectado ao servidor.");
             BufferedReader keyboardInput = new BufferedReader(new InputStreamReader(System.in));
             BufferedReader serverInput = new BufferedReader(new InputStreamReader(socket.getInputStream()));
             PrintWriter serverOutput = new PrintWriter(socket.getOutputStream(), true);
@@ -22,8 +21,7 @@ public class ChatClient {
             receiveThread.start();
             sendThread.start();
             sendThread.join();
-
-            socket.close();
+            receiveThread.join();
             System.out.println("Cliente encerrado.");
         } catch (Exception e) {
             System.out.println("Erro no cliente: " + e.getMessage());

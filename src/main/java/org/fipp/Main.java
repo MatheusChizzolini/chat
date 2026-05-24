@@ -1,6 +1,6 @@
-package org.example;
+package org.fipp;
 
-import org.example.database.DatabaseInitializer;
+import org.fipp.database.DatabaseInitializer;
 
 public class Main {
     public static void main(String[] args) {

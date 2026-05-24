@@ -1,4 +1,4 @@
-package org.example.client;
+package org.fipp.client;
 
 import java.io.BufferedReader;
 import java.io.PrintWriter;
@@ -16,14 +16,12 @@ public class SendThread implements Runnable {
     public void run() {
         try {
             String message;
-            boolean leaveMessage = false;
-            while ((message = keyboardInput.readLine()) != null && !leaveMessage) {
+            boolean isSending = true;
+            while ((message = keyboardInput.readLine()) != null && isSending) {
                 serverOutput.println(message);
                 if (message.equalsIgnoreCase("sair")) {
-                    leaveMessage = true;
+                    isSending = false;
                 }
-
-                System.out.print("> ");
             }
         } catch (Exception e) {
             System.out.println("Erro ao enviar mensagem: " + e.getMessage());
