@@ -6,6 +6,7 @@ import org.fipp.model.GroupJoinRequest;
 import org.fipp.model.GroupJoinVote;
 import org.fipp.model.GroupMessage;
 import org.fipp.model.User;
+import org.fipp.repository.DirectMessageRepository;
 import org.fipp.repository.GroupInvitationRepository;
 import org.fipp.repository.GroupJoinRequestRepository;
 import org.fipp.repository.GroupMessageRepository;
@@ -399,9 +400,16 @@ public class GroupService {
 
     private void notifyInviter(GroupInvitation invitation, String message) {
         ClientHandler inviterHandler = ChatServer.findOnlineClient(invitation.invitedById());
-        if (inviterHandler != null) {
-            inviterHandler.sendMessage(message);
+        if (inviterHandler != null && inviterHandler.sendMessage(message)) {
+            return;
         }
+
+        DirectMessageRepository.save(
+                invitation.receiverId(),
+                invitation.invitedById(),
+                message,
+                DirectMessageRepository.STATUS_QUEUED
+        );
     }
 
     private void printInvitationPrompt(GroupInvitation invitation) {
@@ -499,12 +507,25 @@ public class GroupService {
     }
 
     private void notifyGroupExit(Group group, User departedMember) {
-        String message = departedMember.username() + " saiu do grupo " + group.name() + ".";
+        String message = "saiu do grupo.";
 
         for (User remainingMember : GroupRepository.findMembers(group.id())) {
-            ClientHandler handler = ChatServer.findOnlineClient(remainingMember.id());
-            if (handler != null) {
-                handler.sendMessage(message);
+            synchronized (deliveryLock(remainingMember.id())) {
+                GroupMessage groupMessage = GroupMessageRepository.save(
+                        group.id(),
+                        departedMember.id(),
+                        remainingMember.id(),
+                        message
+                );
+
+                if (groupMessage == null) {
+                    continue;
+                }
+
+                ClientHandler handler = ChatServer.findOnlineClient(remainingMember.id());
+                if (handler != null && handler.sendMessage(formatGroupMessage(groupMessage))) {
+                    GroupMessageRepository.markDelivered(groupMessage.id());
+                }
             }
         }
     }
