@@ -393,20 +393,36 @@ public class ClientHandler implements Runnable {
     }
 
     private void showHelp() {
-        output.println("Comandos disponiveis:");
-        output.println("ajuda - Exibe esta lista de comandos.");
-        output.println("listausuarios - Lista os usuarios online.");
-        output.println("listagrupos - Lista os grupos existentes.");
-        output.println("novogrupo nomegrupo - Cria um grupo e inclui voce como participante.");
-        output.println("inserir &nomegrupo@usuario1,@usuario2 - Convida usuarios para um grupo.");
-        output.println("entrar &nomegrupo - Solicita entrada em um grupo aos participantes.");
-        output.println("sair &nomegrupo - Sai de um grupo e avisa os participantes.");
-        output.println("&nomegrupo: mensagem - Envia mensagem para todos os participantes.");
-        output.println("&nomegrupo@usuario1,@usuario2: mensagem - Envia mensagem para membros selecionados.");
-        output.println("@nomeusuario: mensagem - Envia mensagem privada para um usuario.");
-        output.println("status - Permite alterar seu status para online, offline ou ocupado.");
-        output.println("logout - Sai da conta atual e volta para o menu inicial.");
-        output.println("sair - Encerra o cliente e desconecta do servidor.");
+        output.println("");
+        output.println("=========================== AJUDA ===========================");
+        output.println("[GERAIS]");
+        printHelpCommand("ajuda", "Exibe esta lista de comandos.");
+        printHelpCommand("status", "Altera seu status: online, offline ou ocupado.");
+        printHelpCommand("logout", "Sai da conta e volta ao menu inicial.");
+        printHelpCommand("sair", "Encerra o cliente e desconecta do servidor.");
+
+        printHelpSection("CONTATOS E MENSAGENS");
+        printHelpCommand("listausuarios", "Lista os usuarios online.");
+        printHelpCommand("@usuario: mensagem", "Envia uma mensagem privada.");
+
+        printHelpSection("GRUPOS");
+        printHelpCommand("listagrupos", "Lista os grupos existentes.");
+        printHelpCommand("novogrupo nomegrupo", "Cria um grupo e inclui voce.");
+        printHelpCommand("inserir &grupo@usuario1,@usuario2", "Convida usuarios para um grupo.");
+        printHelpCommand("entrar &grupo", "Solicita entrada aos participantes.");
+        printHelpCommand("sair &grupo", "Sai do grupo e avisa os participantes.");
+        printHelpCommand("&grupo: mensagem", "Envia mensagem para todo o grupo.");
+        printHelpCommand("&grupo@usuario1,@usuario2: mensagem", "Envia apenas aos membros informados.");
+        output.println("=============================================================");
+    }
+
+    private void printHelpSection(String title) {
+        output.println("");
+        output.println("[" + title + "]");
+    }
+
+    private void printHelpCommand(String command, String description) {
+        output.printf("  %-38s %s%n", command, description);
     }
 
     private String readRequiredField(BufferedReader input, String prompt) throws IOException {
