@@ -7,23 +7,13 @@ import org.fipp.repository.DirectMessageRepository;
 import org.fipp.repository.UserRepository;
 
 import java.io.PrintWriter;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Queue;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.ConcurrentMap;
 
 public class PrivateChatService {
     private static final String RESPONSE_YES = "sim";
     private static final String RESPONSE_NO = "nao";
-    private static final DateTimeFormatter DATABASE_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-    private static final DateTimeFormatter MESSAGE_TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm");
-    private static final ConcurrentMap<Integer, Object> DELIVERY_LOCKS = new ConcurrentHashMap<>();
-    private static final ConcurrentMap<String, Object> AUTHORIZATION_LOCKS = new ConcurrentHashMap<>();
 
     private final ClientHandler owner;
     private final PrintWriter output;
@@ -108,17 +98,15 @@ public class PrivateChatService {
     }
 
     public void deliverQueuedMessages(User receiver) {
-        synchronized (deliveryLock(receiver.id())) {
-            List<DirectMessage> messages = DirectMessageRepository.findQueuedMessagesForReceiver(receiver.id());
+        List<DirectMessage> messages = DirectMessageRepository.findQueuedMessagesForReceiver(receiver.id());
 
-            if (!messages.isEmpty()) {
-                output.println("Mensagens pendentes:");
-                for (DirectMessage message : messages) {
-                    if (owner.sendMessage(formatDirectMessage(message))) {
-                        DirectMessageRepository.markDelivered(message.id());
-                    } else {
-                        break;
-                    }
+        if (!messages.isEmpty()) {
+            output.println("Mensagens pendentes:");
+            for (DirectMessage message : messages) {
+                if (owner.sendMessage(formatDirectMessage(message))) {
+                    DirectMessageRepository.markDelivered(message.id());
+                } else {
+                    break;
                 }
             }
         }
@@ -133,16 +121,14 @@ public class PrivateChatService {
     }
 
     private void sendOrRequestPrivateMessage(User sender, User receiver, String content) {
-        synchronized (authorizationLock(sender.id(), receiver.id())) {
-            String authorizationStatus = AuthorizedConnectionRepository.findStatusBetween(sender.id(), receiver.id());
+        String authorizationStatus = AuthorizedConnectionRepository.findStatusBetween(sender.id(), receiver.id());
 
-            if (AuthorizedConnectionRepository.STATUS_ACCEPTED.equals(authorizationStatus)) {
-                sendAuthorizedDirectMessage(sender, receiver, content);
-            } else if (AuthorizedConnectionRepository.STATUS_PENDING.equals(authorizationStatus)) {
-                handlePendingAuthorization(sender, receiver, content);
-            } else {
-                requestNewPrivateConversation(sender, receiver, content);
-            }
+        if (AuthorizedConnectionRepository.STATUS_ACCEPTED.equals(authorizationStatus)) {
+            sendAuthorizedDirectMessage(sender, receiver, content);
+        } else if (AuthorizedConnectionRepository.STATUS_PENDING.equals(authorizationStatus)) {
+            handlePendingAuthorization(sender, receiver, content);
+        } else {
+            requestNewPrivateConversation(sender, receiver, content);
         }
     }
 
@@ -175,34 +161,32 @@ public class PrivateChatService {
     }
 
     private void sendAuthorizedDirectMessage(User sender, User receiver, String content) {
-        synchronized (deliveryLock(receiver.id())) {
-            ClientHandler receiverHandler = ChatServer.findOnlineClient(receiver.id());
+        ClientHandler receiverHandler = ChatServer.findOnlineClient(receiver.id());
 
-            if (receiverHandler != null) {
-                DirectMessage message = DirectMessageRepository.save(
-                        sender.id(),
-                        receiver.id(),
-                        content,
-                        DirectMessageRepository.STATUS_QUEUED
-                );
+        if (receiverHandler != null) {
+            DirectMessage message = DirectMessageRepository.save(
+                    sender.id(),
+                    receiver.id(),
+                    content,
+                    DirectMessageRepository.STATUS_QUEUED
+            );
 
-                if (message == null) {
-                    output.println("Nao foi possivel salvar a mensagem.");
-                } else if (receiverHandler.sendMessage(formatDirectMessage(message))) {
-                    DirectMessageRepository.markDelivered(message.id());
-                    output.println("Mensagem recebida por " + receiver.username() + ".");
-                } else {
-                    output.println(receiver.username() + " nao recebeu a mensagem agora. A mensagem sera entregue quando ficar online.");
-                }
+            if (message == null) {
+                output.println("Nao foi possivel salvar a mensagem.");
+            } else if (receiverHandler.sendMessage(formatDirectMessage(message))) {
+                DirectMessageRepository.markDelivered(message.id());
+                output.println("Mensagem recebida por " + receiver.username() + ".");
             } else {
-                DirectMessageRepository.save(
-                        sender.id(),
-                        receiver.id(),
-                        content,
-                        DirectMessageRepository.STATUS_QUEUED
-                );
-                output.println(receiver.username() + " esta offline ou ocupado. A mensagem sera entregue quando ficar online.");
+                output.println(receiver.username() + " nao recebeu a mensagem agora. A mensagem sera entregue quando ficar online.");
             }
+        } else {
+            DirectMessageRepository.save(
+                    sender.id(),
+                    receiver.id(),
+                    content,
+                    DirectMessageRepository.STATUS_QUEUED
+            );
+            output.println(receiver.username() + " esta offline ou ocupado. A mensagem sera entregue quando ficar online.");
         }
     }
 
@@ -214,36 +198,32 @@ public class PrivateChatService {
     }
 
     private void acceptPrivateRequest(PendingPrivateRequest request, User receiver) {
-        synchronized (authorizationLock(request.requesterId(), receiver.id())) {
-            boolean accepted = AuthorizedConnectionRepository.accept(request.requesterId(), receiver.id());
+        boolean accepted = AuthorizedConnectionRepository.accept(request.requesterId(), receiver.id());
 
-            if (accepted) {
-                int deliveredMessages = deliverPendingAuthorizationMessages(request.requesterId(), receiver);
-                output.println("Conversa privada com " + request.requesterUsername() + " aceita.");
-                notifyOnlineUser(
-                        request.requesterId(),
-                        receiver.username() + " aceitou sua conversa privada. Mensagens entregues: " + deliveredMessages + "."
-                );
-            } else {
-                output.println("Nao foi possivel aceitar a solicitacao privada.");
-            }
+        if (accepted) {
+            int deliveredMessages = deliverPendingAuthorizationMessages(request.requesterId(), receiver);
+            output.println("Conversa privada com " + request.requesterUsername() + " aceita.");
+            notifyOnlineUser(
+                    request.requesterId(),
+                    receiver.username() + " aceitou sua conversa privada. Mensagens entregues: " + deliveredMessages + "."
+            );
+        } else {
+            output.println("Nao foi possivel aceitar a solicitacao privada.");
         }
     }
 
     private void rejectPrivateRequest(PendingPrivateRequest request, User receiver) {
-        synchronized (authorizationLock(request.requesterId(), receiver.id())) {
-            boolean rejected = AuthorizedConnectionRepository.reject(request.requesterId(), receiver.id());
-            int rejectedMessages = DirectMessageRepository.rejectPendingAuthorizationMessages(request.requesterId(), receiver.id());
+        boolean rejected = AuthorizedConnectionRepository.reject(request.requesterId(), receiver.id());
+        int rejectedMessages = DirectMessageRepository.rejectPendingAuthorizationMessages(request.requesterId(), receiver.id());
 
-            if (rejected) {
-                output.println("Conversa privada com " + request.requesterUsername() + " recusada.");
-                notifyOnlineUser(
-                        request.requesterId(),
-                        receiver.username() + " recusou sua conversa privada. Mensagens rejeitadas: " + rejectedMessages + "."
-                );
-            } else {
-                output.println("Nao foi possivel recusar a solicitacao privada.");
-            }
+        if (rejected) {
+            output.println("Conversa privada com " + request.requesterUsername() + " recusada.");
+            notifyOnlineUser(
+                    request.requesterId(),
+                    receiver.username() + " recusou sua conversa privada. Mensagens rejeitadas: " + rejectedMessages + "."
+            );
+        } else {
+            output.println("Nao foi possivel recusar a solicitacao privada.");
         }
     }
 
@@ -275,28 +255,11 @@ public class PrivateChatService {
     }
 
     private String formatMessageTime(String createdAt) {
-        if (createdAt != null) {
-            try {
-                LocalDateTime utcTime = LocalDateTime.parse(createdAt, DATABASE_TIME_FORMAT);
-                return utcTime.atZone(ZoneOffset.UTC)
-                        .withZoneSameInstant(ZoneId.systemDefault())
-                        .format(MESSAGE_TIME_FORMAT);
-            } catch (Exception ignored) {
-                return "--:--";
-            }
+        if (createdAt != null && createdAt.length() >= 16) {
+            return createdAt.substring(11, 16);
         }
 
         return "--:--";
-    }
-
-    private Object deliveryLock(int receiverId) {
-        return DELIVERY_LOCKS.computeIfAbsent(receiverId, ignored -> new Object());
-    }
-
-    private Object authorizationLock(int firstUserId, int secondUserId) {
-        int lowerId = Math.min(firstUserId, secondUserId);
-        int higherId = Math.max(firstUserId, secondUserId);
-        return AUTHORIZATION_LOCKS.computeIfAbsent(lowerId + ":" + higherId, ignored -> new Object());
     }
 
     private record PendingPrivateRequest(int requesterId, String requesterUsername) {

@@ -14,26 +14,17 @@ import org.fipp.repository.GroupRepository;
 import org.fipp.repository.UserRepository;
 
 import java.io.PrintWriter;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Queue;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.ConcurrentMap;
 
 public class GroupService {
     private static final String RESPONSE_YES = "sim";
     private static final String RESPONSE_NO = "nao";
-    private static final DateTimeFormatter DATABASE_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-    private static final DateTimeFormatter MESSAGE_TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm");
-    private static final ConcurrentMap<Integer, Object> DELIVERY_LOCKS = new ConcurrentHashMap<>();
 
     private final ClientHandler owner;
     private final PrintWriter output;
@@ -193,17 +184,15 @@ public class GroupService {
     }
 
     public void deliverQueuedMessages(User receiver) {
-        synchronized (deliveryLock(receiver.id())) {
-            List<GroupMessage> messages = GroupMessageRepository.findQueuedForReceiver(receiver.id());
+        List<GroupMessage> messages = GroupMessageRepository.findQueuedForReceiver(receiver.id());
 
-            if (!messages.isEmpty()) {
-                output.println("Mensagens pendentes de grupos:");
-                for (GroupMessage message : messages) {
-                    if (owner.sendMessage(formatGroupMessage(message))) {
-                        GroupMessageRepository.markDelivered(message.id());
-                    } else {
-                        break;
-                    }
+        if (!messages.isEmpty()) {
+            output.println("Mensagens pendentes de grupos:");
+            for (GroupMessage message : messages) {
+                if (owner.sendMessage(formatGroupMessage(message))) {
+                    GroupMessageRepository.markDelivered(message.id());
+                } else {
+                    break;
                 }
             }
         }
@@ -510,22 +499,20 @@ public class GroupService {
         String message = "saiu do grupo.";
 
         for (User remainingMember : GroupRepository.findMembers(group.id())) {
-            synchronized (deliveryLock(remainingMember.id())) {
-                GroupMessage groupMessage = GroupMessageRepository.save(
-                        group.id(),
-                        departedMember.id(),
-                        remainingMember.id(),
-                        message
-                );
+            GroupMessage groupMessage = GroupMessageRepository.save(
+                    group.id(),
+                    departedMember.id(),
+                    remainingMember.id(),
+                    message
+            );
 
-                if (groupMessage == null) {
-                    continue;
-                }
+            if (groupMessage == null) {
+                continue;
+            }
 
-                ClientHandler handler = ChatServer.findOnlineClient(remainingMember.id());
-                if (handler != null && handler.sendMessage(formatGroupMessage(groupMessage))) {
-                    GroupMessageRepository.markDelivered(groupMessage.id());
-                }
+            ClientHandler handler = ChatServer.findOnlineClient(remainingMember.id());
+            if (handler != null && handler.sendMessage(formatGroupMessage(groupMessage))) {
+                GroupMessageRepository.markDelivered(groupMessage.id());
             }
         }
     }
@@ -567,21 +554,19 @@ public class GroupService {
     }
 
     private void sendGroupMessage(Group group, User sender, User receiver, String content) {
-        synchronized (deliveryLock(receiver.id())) {
-            GroupMessage message = GroupMessageRepository.save(group.id(), sender.id(), receiver.id(), content);
+        GroupMessage message = GroupMessageRepository.save(group.id(), sender.id(), receiver.id(), content);
 
-            if (message == null) {
-                output.println("Nao foi possivel salvar a mensagem para " + receiver.username() + ".");
-                return;
-            }
+        if (message == null) {
+            output.println("Nao foi possivel salvar a mensagem para " + receiver.username() + ".");
+            return;
+        }
 
-            ClientHandler receiverHandler = ChatServer.findOnlineClient(receiver.id());
-            if (receiverHandler != null && receiverHandler.sendMessage(formatGroupMessage(message))) {
-                GroupMessageRepository.markDelivered(message.id());
-                output.println("Mensagem do grupo " + group.name() + " recebida por " + receiver.username() + ".");
-            } else {
-                output.println(receiver.username() + " nao esta online. A mensagem do grupo sera entregue depois.");
-            }
+        ClientHandler receiverHandler = ChatServer.findOnlineClient(receiver.id());
+        if (receiverHandler != null && receiverHandler.sendMessage(formatGroupMessage(message))) {
+            GroupMessageRepository.markDelivered(message.id());
+            output.println("Mensagem do grupo " + group.name() + " recebida por " + receiver.username() + ".");
+        } else {
+            output.println(receiver.username() + " nao esta online. A mensagem do grupo sera entregue depois.");
         }
     }
 
@@ -591,22 +576,11 @@ public class GroupService {
     }
 
     private String formatMessageTime(String createdAt) {
-        if (createdAt != null) {
-            try {
-                LocalDateTime utcTime = LocalDateTime.parse(createdAt, DATABASE_TIME_FORMAT);
-                return utcTime.atZone(ZoneOffset.UTC)
-                        .withZoneSameInstant(ZoneId.systemDefault())
-                        .format(MESSAGE_TIME_FORMAT);
-            } catch (Exception ignored) {
-                return "--:--";
-            }
+        if (createdAt != null && createdAt.length() >= 16) {
+            return createdAt.substring(11, 16);
         }
 
         return "--:--";
-    }
-
-    private Object deliveryLock(int receiverId) {
-        return DELIVERY_LOCKS.computeIfAbsent(receiverId, ignored -> new Object());
     }
 
     private enum PendingResponse {
