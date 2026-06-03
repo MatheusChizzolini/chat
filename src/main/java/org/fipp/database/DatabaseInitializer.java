@@ -44,7 +44,6 @@ public class DatabaseInitializer {
         try (Connection connection = DatabaseConnection.getConnection();
              Statement statement = connection.createStatement()) {
             statement.execute(sql);
-            System.out.println("Tabela de usuarios criada/checada com sucesso.");
         } catch (Exception e) {
             System.out.println("Erro ao criar tabela de usuarios: " + e.getMessage());
         }
@@ -73,7 +72,6 @@ public class DatabaseInitializer {
         try (Connection connection = DatabaseConnection.getConnection();
              Statement statement = connection.createStatement()) {
             statement.execute(sql);
-            System.out.println("Tabela de conexoes autorizadas criada/checada com sucesso.");
         } catch (Exception e) {
             System.out.println("Erro ao criar tabela de conexoes autorizadas: " + e.getMessage());
         }
@@ -98,7 +96,6 @@ public class DatabaseInitializer {
         try (Connection connection = DatabaseConnection.getConnection();
              Statement statement = connection.createStatement()) {
             statement.execute(sql);
-            System.out.println("Tabela de mensagens privadas criada/checada com sucesso.");
         } catch (Exception e) {
             System.out.println("Erro ao criar tabela de mensagens privadas: " + e.getMessage());
         }
@@ -118,7 +115,6 @@ public class DatabaseInitializer {
         try (Connection connection = DatabaseConnection.getConnection();
              Statement statement = connection.createStatement()) {
             statement.execute(sql);
-            System.out.println("Tabela de grupos criada/checada com sucesso.");
         } catch (Exception e) {
             System.out.println("Erro ao criar tabela de grupos: " + e.getMessage());
         }
@@ -139,7 +135,6 @@ public class DatabaseInitializer {
         try (Connection connection = DatabaseConnection.getConnection();
              Statement statement = connection.createStatement()) {
             statement.execute(sql);
-            System.out.println("Tabela de membros dos grupos criada/checada com sucesso.");
         } catch (Exception e) {
             System.out.println("Erro ao criar tabela de membros dos grupos: " + e.getMessage());
         }
@@ -166,7 +161,6 @@ public class DatabaseInitializer {
         try (Connection connection = DatabaseConnection.getConnection();
              Statement statement = connection.createStatement()) {
             statement.execute(sql);
-            System.out.println("Tabela de convites dos grupos criada/checada com sucesso.");
         } catch (Exception e) {
             System.out.println("Erro ao criar tabela de convites dos grupos: " + e.getMessage());
         }
@@ -192,7 +186,6 @@ public class DatabaseInitializer {
         try (Connection connection = DatabaseConnection.getConnection();
              Statement statement = connection.createStatement()) {
             statement.execute(sql);
-            System.out.println("Tabela de solicitacoes de entrada criada/checada com sucesso.");
         } catch (Exception e) {
             System.out.println("Erro ao criar tabela de solicitacoes de entrada: " + e.getMessage());
         }
@@ -215,7 +208,6 @@ public class DatabaseInitializer {
         try (Connection connection = DatabaseConnection.getConnection();
              Statement statement = connection.createStatement()) {
             statement.execute(sql);
-            System.out.println("Tabela de votos para entrada criada/checada com sucesso.");
         } catch (Exception e) {
             System.out.println("Erro ao criar tabela de votos para entrada: " + e.getMessage());
         }
@@ -242,7 +234,6 @@ public class DatabaseInitializer {
         try (Connection connection = DatabaseConnection.getConnection();
              Statement statement = connection.createStatement()) {
             statement.execute(sql);
-            System.out.println("Tabela de mensagens dos grupos criada/checada com sucesso.");
         } catch (Exception e) {
             System.out.println("Erro ao criar tabela de mensagens dos grupos: " + e.getMessage());
         }
